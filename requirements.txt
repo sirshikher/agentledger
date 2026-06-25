@@ -1,0 +1,19 @@
+# Google ADK & Gemini
+google-adk>=1.2.0
+google-genai>=1.14.0
+
+# MCP Server
+mcp[cli]>=1.9.0
+
+# Data & Persistence
+aiosqlite>=0.21.0
+
+# Observability & Display
+rich>=13.9.0
+
+# Eval
+numpy>=1.26.0
+
+# Utilities
+python-dotenv>=1.0.0
+pydantic>=2.10.0
