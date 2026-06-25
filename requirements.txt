@@ -17,3 +17,6 @@ numpy>=1.26.0
 # Utilities
 python-dotenv>=1.0.0
 pydantic>=2.10.0
+
+# Demo dashboard (Phase 2)
+streamlit>=1.38.0

@@ -124,6 +124,8 @@ async def build_run_record(
     db_path: Path,
     recommendations: list[dict],
     run_evaluation: bool = True,
+    run_detection: bool | None = None,
+    run_judge: bool | None = None,
 ) -> dict:
     """
     Assemble the full run-record dict for export.
@@ -136,11 +138,20 @@ async def build_run_record(
         db_path: Path to the SQLite database.
         recommendations: vendor_history rows created during this run
             (see get_vendor_history_max_id / get_recommendations_since).
-        run_evaluation: Whether to compute detection metrics + LLM-judge scores.
+        run_evaluation: Back-compat alias controlling both detection + judge when
+            run_detection/run_judge are not explicitly given.
+        run_detection: Compute detection precision/recall/F1 (deterministic, free).
+            Defaults to run_evaluation.
+        run_judge: Score recommendations via the LLM-as-judge (extra Gemini calls,
+            slower). Defaults to run_evaluation.
 
     Returns:
         A JSON-serializable dict conforming to schema v1.0.
     """
+    if run_detection is None:
+        run_detection = run_evaluation
+    if run_judge is None:
+        run_judge = run_evaluation
     anomalies = build_anomalies(db_path)
 
     parsed_recs = []
@@ -170,10 +181,19 @@ async def build_run_record(
         })
 
     evaluation = {}
-    if run_evaluation:
+    if run_detection:
         ground_truth = load_ground_truth()
         detection_result = evaluate_detection(anomalies, ground_truth)
+        evaluation["detection"] = {
+            "precision": round(detection_result.precision, 3),
+            "recall": round(detection_result.recall, 3),
+            "f1": round(detection_result.f1, 3),
+            "true_positives": detection_result.true_positives,
+            "false_positives": detection_result.false_positives,
+            "false_negatives": detection_result.false_negatives,
+        }
 
+    if run_judge:
         judge_scores = {}
         for rec in parsed_recs:
             score = await llm_judge_recommendation(rec["recommendation_text"], rec["vendor"])
@@ -182,20 +202,9 @@ async def build_run_record(
             round(sum(judge_scores.values()) / len(judge_scores), 2)
             if judge_scores else 0.0
         )
-
-        evaluation = {
-            "detection": {
-                "precision": round(detection_result.precision, 3),
-                "recall": round(detection_result.recall, 3),
-                "f1": round(detection_result.f1, 3),
-                "true_positives": detection_result.true_positives,
-                "false_positives": detection_result.false_positives,
-                "false_negatives": detection_result.false_negatives,
-            },
-            "judge": {
-                "average_score": avg_judge,
-                "scores": judge_scores,
-            },
+        evaluation["judge"] = {
+            "average_score": avg_judge,
+            "scores": judge_scores,
         }
 
     return {
