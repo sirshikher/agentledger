@@ -35,6 +35,11 @@ from rich.prompt import Prompt, Confirm
 from config import GOOGLE_API_KEY, GEMINI_MODEL, DB_PATH
 from agents.agent_definitions import root_agent
 from observability.tracer import Tracer
+from observability.run_record import (
+    build_run_record,
+    get_vendor_history_max_id,
+    get_recommendations_since,
+)
 from eval.eval_harness import (
     evaluate_detection,
     load_ground_truth,
@@ -129,6 +134,13 @@ async def run_agent_pipeline(user_query: str, tracer: Tracer, enable_hitl: bool 
         else:
             agent_name = "orchestrator"
 
+        # Real token usage from the model response (Phase 1: replaces estimate)
+        tokens_in, tokens_out = 0, 0
+        usage = getattr(event, "usage_metadata", None)
+        if usage:
+            tokens_in = usage.prompt_token_count or 0
+            tokens_out = usage.candidates_token_count or 0
+
         # Process text responses
         if hasattr(event, 'content') and event.content and event.content.parts:
             for part in event.content.parts:
@@ -136,13 +148,13 @@ async def run_agent_pipeline(user_query: str, tracer: Tracer, enable_hitl: bool 
                     text = part.text
                     agent_response_text += text
 
-                    # Log agent output (Day 4: Logs)
+                    # Log agent output (Day 4: Logs) with real token counts
                     tracer.log(
                         agent_name=agent_name,
                         action="response",
                         input_summary=user_query,
                         output_summary=text[:200],
-                        tokens_used=len(text.split()) * 2,  # Rough estimate
+                        tokens_used=tokens_in + tokens_out,
                     )
 
                     # Display agent output
@@ -153,6 +165,8 @@ async def run_agent_pipeline(user_query: str, tracer: Tracer, enable_hitl: bool 
                     results["all_agent_outputs"].append({
                         "agent": agent_name,
                         "text": text,
+                        "tokens_in": tokens_in,
+                        "tokens_out": tokens_out,
                     })
 
         # Track tool calls (Day 4: Traces)
@@ -243,6 +257,8 @@ async def main():
     parser.add_argument("--no-hitl", action="store_true", help="Skip HITL approval gate")
     parser.add_argument("--query", type=str, default="",
                         help="Custom query (default: review last quarter's spend)")
+    parser.add_argument("--export", type=str, default="",
+                        help="Write a run-record JSON to this path (Phase 1: demo UI export)")
     args = parser.parse_args()
 
     # Validate API key
@@ -264,11 +280,31 @@ async def main():
         # Interactive demo mode
         query = args.query or "Review our SaaS spend for the last quarter. Flag any anomalies, identify savings opportunities, and prepare recommendations for upcoming renewals."
 
+        # Snapshot vendor_history before the run so we can isolate this run's
+        # recommendations afterward (Phase 1: run-record export).
+        recs_since_id = get_vendor_history_max_id(DB_PATH) if args.export else 0
+
         results = await run_agent_pipeline(
             user_query=query,
             tracer=tracer,
             enable_hitl=not args.no_hitl,
         )
+
+        if args.export:
+            tracer.finalize()
+            this_run_recs = get_recommendations_since(DB_PATH, recs_since_id)
+            record = await build_run_record(
+                query=query,
+                mode="live",
+                results=results,
+                tracer=tracer,
+                db_path=DB_PATH,
+                recommendations=this_run_recs,
+            )
+            export_path = Path(args.export)
+            export_path.parent.mkdir(parents=True, exist_ok=True)
+            export_path.write_text(json.dumps(record, indent=2, default=str))
+            console.print(f"\n[bold green]Run record exported to {export_path}[/bold green]")
 
     # Finalize and display observability (Day 4: the differentiator)
     tracer.finalize()

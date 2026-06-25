@@ -291,3 +291,56 @@ class Tracer:
             },
             "log_count": len(self.logs),
         }
+
+    # --- Full serialization (Phase 1: run-record export) ---
+
+    def serialize_span(self, span: TraceSpan | None = None, _depth: int = 0) -> dict | None:
+        """Recursively serialize a trace span (and its children) to a plain dict."""
+        if span is None:
+            span = self.root_span
+        if span is None or _depth > 50:
+            return None
+        return {
+            "span_id": span.span_id,
+            "agent_name": span.agent_name,
+            "operation": span.operation,
+            "duration_ms": span.duration_ms,
+            "tokens_in": span.tokens_in,
+            "tokens_out": span.tokens_out,
+            "status": span.status,
+            "tool_calls": span.tool_calls,
+            "children": [
+                self.serialize_span(child, _depth + 1) for child in span.children
+            ],
+        }
+
+    def serialize_logs(self) -> list[dict]:
+        """Serialize all log entries to a flat list of plain dicts."""
+        base_time = self.logs[0].timestamp if self.logs else 0
+        return [
+            {
+                "t_offset_s": round(entry.timestamp - base_time, 3),
+                "agent": entry.agent_name,
+                "action": entry.action,
+                "tools": entry.tool_calls,
+                "tokens": entry.tokens_used,
+                "output": entry.output_summary,
+            }
+            for entry in self.logs
+        ]
+
+    def serialize_metrics(self) -> dict:
+        """Serialize aggregate run metrics to a plain dict."""
+        m = self.metrics
+        return {
+            "total_duration_ms": m.total_duration_ms,
+            "total_tokens": m.total_tokens,
+            "total_cost_usd": m.total_cost_usd,
+            "agents_invoked": m.agents_invoked,
+            "tool_calls_made": m.tool_calls_made,
+            "anomalies_flagged": m.anomalies_flagged,
+            "recommendations_made": m.recommendations_made,
+            "approvals_requested": m.approvals_requested,
+            "approvals_granted": m.approvals_granted,
+            "approvals_rejected": m.approvals_rejected,
+        }

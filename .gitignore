@@ -15,6 +15,9 @@ env/
 data/*.db
 data/*.sqlite
 
+runs/*.json
+!runs/golden_*.json
+
 .idea/
 .vscode/
 *.swp
