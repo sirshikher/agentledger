@@ -6,12 +6,17 @@ Sequential pipeline: Orchestrator → Ingestion → Anomaly → Negotiation → 
 
 Concepts demonstrated:
   - Day 1: Multi-agent ADK, agent taxonomy, architectural patterns
-  - Day 2: Custom tools, MCP integration
+  - Day 2: Custom tools, MCP integration (ingestion_agent uses McpToolset)
   - Day 3: Session state, context engineering
   - Day 5: A2A-style structured delegation
 """
 
+import sys
+from pathlib import Path
+
+from mcp import StdioServerParameters
 from google.adk.agents import Agent, SequentialAgent
+from google.adk.tools.mcp_tool import McpToolset, StdioConnectionParams
 
 from config import GEMINI_MODEL
 from agents.prompts import (
@@ -22,9 +27,7 @@ from agents.prompts import (
     REPORTING_AGENT_INSTRUCTION,
 )
 from tools.agent_tools import (
-    # Ingestion tools
-    fetch_all_invoices,
-    fetch_all_usage,
+    # Ingestion — fetch_all_contracts has no MCP bulk equivalent; kept direct
     fetch_all_contracts,
     # Anomaly detection skill (Day 1: agent skills)
     detect_spend_spikes,
@@ -38,6 +41,21 @@ from tools.agent_tools import (
     get_past_recommendations,
 )
 
+# MCP toolset for ingestion: get_invoices + get_usage served by the AgentLedger
+# billing MCP server over stdio (Day 2: MCP server → transport → client pattern).
+_PROJECT_ROOT = Path(__file__).parent.parent
+ingestion_mcp_toolset = McpToolset(
+    connection_params=StdioConnectionParams(
+        server_params=StdioServerParameters(
+            command=sys.executable,
+            args=["-m", "mcp_server.server"],
+            cwd=str(_PROJECT_ROOT),
+        ),
+        timeout=10.0,
+    ),
+    tool_filter=["get_invoices", "get_usage"],
+)
+
 
 # ============================================================
 # SUB-AGENTS (Day 1: specialized agent roles)
@@ -49,9 +67,8 @@ ingestion_agent = Agent(
     instruction=INGESTION_AGENT_INSTRUCTION,
     description="Gathers and normalizes billing data from invoices, usage records, and contracts.",
     tools=[
-        fetch_all_invoices,
-        fetch_all_usage,
-        fetch_all_contracts,
+        ingestion_mcp_toolset,  # get_invoices + get_usage via MCP (Day 2)
+        fetch_all_contracts,    # bulk contracts — no MCP equivalent; kept direct
     ],
 )
 
