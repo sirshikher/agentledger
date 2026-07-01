@@ -363,18 +363,7 @@ def render_details(record: dict):
             st.dataframe(logs, width="stretch")
 
     ev = record.get("evaluation", {})
-    detection = ev.get("detection")
-    judge = ev.get("judge")
-    if detection or judge:
+    if ev.get("detection") or ev.get("judge"):
         with st.expander("Evaluation detail"):
-            if detection:
-                st.markdown(f"**True positives:** {', '.join(detection.get('true_positives', [])) or '—'}")
-                st.markdown(f"**False positives:** {', '.join(detection.get('false_positives', [])) or '—'}")
-                st.markdown(f"**False negatives:** {', '.join(detection.get('false_negatives', [])) or '—'}")
-            if judge:
-                st.divider()
-                st.markdown(f"**LLM-judge average:** {judge['average_score']:.2f} / 5")
-                for vendor, score in judge.get("scores", {}).items():
-                    st.markdown(f"- **{vendor}**: {score:.1f}/5")
-            elif detection:
-                st.caption("Judge not run for this record.")
+            from dashboard.a2ui import render_eval_a2ui
+            render_eval_a2ui(record)

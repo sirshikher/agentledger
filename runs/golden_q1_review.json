@@ -608,5 +608,47 @@
   },
   "totals": {
     "identified_annual_savings_usd": 73200.0
+  },
+  "a2ui": {
+    "generated_by": "gemini-2.5-flash",
+    "generated_at": "2026-07-01T17:00:40.639532+00:00",
+    "components": [
+      {
+        "type": "note",
+        "text": "The pipeline achieved a strong F1 score of 85.7%, indicating a good balance between identifying actual cost-saving opportunities and avoiding incorrect detections. However, two false positives were identified for `duplicate_tools:Slack,Zoom` and `duplicate_tools:GitHub Enterprise,Vercel`, suggesting potential for unnecessary investigations. A key false negative was `spend_spike:AWS`, representing a missed savings opportunity, while overall recommendation quality remains high at 4.72 / 5."
+      },
+      {
+        "type": "metric",
+        "label": "Precision",
+        "value": "81.8%"
+      },
+      {
+        "type": "metric",
+        "label": "Recall",
+        "value": "90.0%"
+      },
+      {
+        "type": "metric",
+        "label": "F1 Score",
+        "value": "85.7%"
+      },
+      {
+        "type": "metric",
+        "label": "Judge Avg Score",
+        "value": "4.72 / 5"
+      },
+      {
+        "type": "alert",
+        "severity": "medium",
+        "title": "Incorrect Duplicate Tool Detections",
+        "detail": "Detected `duplicate_tools:Slack,Zoom` and `duplicate_tools:GitHub Enterprise,Vercel` incorrectly, leading to wasted review effort."
+      },
+      {
+        "type": "alert",
+        "severity": "high",
+        "title": "Missed AWS Spend Spike",
+        "detail": "Failed to detect `spend_spike:AWS`, representing a potentially large missed cost-saving opportunity."
+      }
+    ]
   }
 }
